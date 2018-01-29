@@ -5,7 +5,6 @@
 
 window.onload = init;
 
-
  // stats box
 let stats;
 // renderer
@@ -17,15 +16,19 @@ let cornerEdgeLeft, cornerEdgeRight;
 let leftBox, baseBox, rightBox;
 let leftBoxOrigin, baseBoxOrigin, rightBoxOrigin;
 
-let screenWidth = 100;
+let screenWidth = 320;
 let screenHeight;
-let tankWidth = 20;
-let tankHeight = 10;
+let tankWidth = 50;
+let tankHeight = 5;
 let edgeWidth = 2;
-let iterateStep = 5;
+let waterHeight = 20;
+
+let iterateStep = 4;
+let gravity = 5;            // gravity  m/s2
+let produceInterval = 150;
 
 let renderScale = 100;
-let particleNumber = 400;
+let particleNumber = 500;
 
 // Constants for interaction term
 let C0, C1 ,C2;
@@ -33,14 +36,13 @@ let C0, C1 ,C2;
 // Resistance to compression
 // speed of sound = sqrt(k / density)
 let k = 30;         // Bulk modulus (1000)
-let gravity = 3;  // gravity  m/s2
 let mu = 3;         // Viscosity (0.1)
 let Cp =  15 * k;
 let Cv = -40 * mu;
 
 let waterMaterial;
 let minColor = new THREE.Color(0.7, 0.86, 0.98);
-let maxColor = new THREE.Color(0, 0, 1);
+let maxColor = new THREE.Color(1, 0, 0);
 let waterPointInView, waterPointOutView;
 let waterMass = 1;
 let waterDensity = 1000;    // g/m3
@@ -64,6 +66,7 @@ let lastMousePoint;
 let rotationRadian = 0;
 let waterGate = true;
 let mouseThreshold = 10;
+let produceNumber = 3;
 
 let textureLoader = new THREE.TextureLoader();
 
@@ -197,7 +200,7 @@ function render(){
 function animate() {
     
     // boxHandle();
-    // colorHandle();
+    colorHandle();
 
     let count = 0;
     let millis = new Date().getTime();
@@ -207,7 +210,7 @@ function animate() {
     }
 
     let now = new Date().getTime();
-    if( waterGate && (now - lastTimeStamp > 200)){
+    if( waterGate && (now - lastTimeStamp > produceInterval)){
         produceParticle();
         lastTimeStamp = now;
     }
@@ -426,13 +429,12 @@ function normalizeMass(){
     
     waterMass = 1;
     for(let i = 0 ; i < waterPointOutView.length; i++){
-        // initlize density
-        waterPointOutView[i].density = 4 * waterMass / (Math.PI * waterSize2);
 
         densitySum2 += waterPointOutView[i].density * waterPointOutView[i].density;
         densitySum += waterPointOutView[i].density;
     }
 
+    // get desired mass based on desired density
     waterMass = waterDensity * densitySum / densitySum2;
     C0 = waterMass / (Math.PI * waterSize4);
     C1 = 4 * waterMass / (Math.PI * waterSize2);
@@ -448,25 +450,33 @@ function initializeSystem(){
     normalizeMass();
 }
 
+function oneParticle(index){
+    let particle = waterPointOutView[0];
+    // reset position
+    particle.position.set( tankWidth/2-waterSize*renderScale*index , waterHeight ,0);
+    particle.pos.set(particle.position.x/ renderScale , particle.position.y/renderScale );
+
+    // Reset acceleration
+    particle.acc.set(0,-gravity);
+    // reset velocity
+    particle.velocity.set(-Math.random()/10, 0);
+    particle.halfVelocity.x = particle.velocity.x + particle.acc.x *dt2;
+    particle.halfVelocity.y = particle.velocity.y + particle.acc.y *dt2;
+    
+    particle.velocity.x = particle.acc.x*dt2;
+    particle.velocity.y = particle.acc.y*dt2;
+
+    particle.density = 4 * waterMass / (Math.PI * waterSize2);
+
+    waterPointInView.push(particle);
+    waterPointOutView.splice(0,1);
+}
+
 function produceParticle(){
-    if(waterPointOutView.length > 0){
-        let particle = waterPointOutView[0];
-        // reset position
-        particle.position.set( 0 , tankHeight*3 ,0);
-        particle.pos.set(particle.position.x/ renderScale , particle.position.y/renderScale );
-
-        // Reset acceleration
-        particle.acc.set(0,-gravity);
-        // reset velocity
-        particle.velocity.set((Math.random()*2-1)/5, -Math.random()/10);
-        particle.halfVelocity.x = particle.velocity.x + particle.acc.x *dt2;
-        particle.halfVelocity.y = particle.velocity.y + particle.acc.y *dt2;
-        
-        particle.velocity.x = particle.acc.x*dt2;
-        particle.velocity.y = particle.acc.y*dt2;
-
-        waterPointInView.push(particle);
-        waterPointOutView.splice(0,1);
+    if(waterPointOutView.length > produceNumber){
+        for(let i = 1; i <= produceNumber; i++){
+            oneParticle(i);
+        }
     }
 }
 
@@ -476,7 +486,8 @@ function createParticle(){
     let dx = -Math.random()/2;
     let dy = -Math.random()/2;
     sprite.velocity = new THREE.Vector2(dx,dy);
-    sprite.density = 0;
+    // initlize density
+    sprite.density = 4 * waterMass / (Math.PI * waterSize2);
     sprite.acc = new THREE.Vector2(0, -gravity);
     sprite.halfVelocity = new THREE.Vector2();
     sprite.pos = new THREE.Vector2();
